@@ -6,6 +6,10 @@ module OscarBookExamples
 const oscar_book_dir = "~/papers/oscar-book"
 const doc_dir = joinpath(Base.pkgdir(OscarBookExamples), "docs/src")
 const obe_dir = Base.pkgdir(OscarBookExamples)
+const excluded = [
+                  "markwig-ristau-schleis-faithful-tropicalization/eliminate_xz",
+                  "markwig-ristau-schleis-faithful-tropicalization/eliminate_yz",
+                 ]
 
 function collect_examples(; dir=nothing)
   book_dir = oscar_book_dir
@@ -58,7 +62,10 @@ function get_ordered_examples(root::String, filename::String)
       if matchtype == "jlcon"
         matchfilename = replace(matchfilename, "\\fd/" => "")
         matchfilename = joinpath(root, matchfilename)
-        result *= read_example(matchfilename)
+        exclude = length(filter(s->occursin(s, matchfilename), excluded)) > 0
+        if !exclude
+          result *= read_example(matchfilename)
+        end
       end
     end
   end

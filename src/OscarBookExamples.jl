@@ -51,6 +51,8 @@ end
 
 function get_ordered_examples(root::String, filename::String)
   latex = complete_latex(root, filename)
+  decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
+  label = decomposed.captures[2]
   result = ""
   for line in eachsplit(latex, "\n")
     m = match(r"^[^%]*\\inputminted{([^\}]*)\}\{([^\}]*)\}", line)
@@ -64,7 +66,7 @@ function get_ordered_examples(root::String, filename::String)
         matchfilename = joinpath(root, matchfilename)
         exclude = length(filter(s->occursin(s, matchfilename), excluded)) > 0
         if !exclude
-          result *= read_example(matchfilename)
+          result *= read_example(matchfilename, label)
         end
       end
     end
@@ -72,11 +74,11 @@ function get_ordered_examples(root::String, filename::String)
   return result
 end
 
-function read_example(file::String)
+function read_example(file::String, label::AbstractString)
   result = read(file, String)
   is_repl = match(r"^julia>", result) !== nothing
   if is_repl
-    result = "```jldoctest\n$result\n```"
+    result = "```jldoctest $label\n$result\n```"
   else
     result = "```julia\n$result\n```"
   end

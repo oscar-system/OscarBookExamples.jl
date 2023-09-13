@@ -1,7 +1,5 @@
 module OscarBookExamples
 
-# Write your package code here.
-
 
 const oscar_book_dir = "~/papers/oscar-book"
 const doc_dir = joinpath(Base.pkgdir(OscarBookExamples), "docs/src")
@@ -10,6 +8,49 @@ const excluded = [
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_xz",
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_yz",
                  ]
+
+###############################################################################
+###############################################################################
+## 
+## Reporting on errors
+##
+
+function generate_report()
+  for (root, dirs, files) in walkdir(doc_dir)
+    for file in files
+      if match(r"\.md", file) !== nothing
+        generate_diff(root, file)
+      end
+    end
+  end
+end
+
+function generate_diff(root::String, filename::String)
+  entire = read(joinpath(root, filename), String)
+  examples = split(entire, "## Example")
+  for example in examples
+    m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n([^`]*)```", example)
+    if m !== nothing
+      filename = m.captures[1]
+      content = m.captures[2]
+      orig = read(filename, String)
+      if content == orig
+        println("$filename OK")
+      else
+        println("Filename: $filename")
+        println("Content:\n$content\n--")
+        println("Orig:\n$orig\n--")
+      end
+    end
+  end
+end
+
+
+###############################################################################
+###############################################################################
+## 
+## Getting examples from book
+##
 
 function collect_examples(; dir=nothing)
   book_dir = oscar_book_dir
@@ -77,10 +118,11 @@ end
 function read_example(file::String, label::AbstractString)
   result = read(file, String)
   is_repl = match(r"^julia>", result) !== nothing
+  # Should newline at end be removed?
   if is_repl
-    result = "```jldoctest $label\n$result\n```"
+    result = "```jldoctest $label\n$result```"
   else
-    result = "```julia\n$result\n```"
+    result = "```julia\n$result```"
   end
   result = "## Example `$file`\n$result\n\n"
   return result

@@ -10,6 +10,9 @@ const excluded = [
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_xz",
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_yz",
                  ]
+nexamples = 0
+all_examples = String[]
+recovered_examples = String[]
 
 
 function roundtrip(;book_dir=nothing, fix=false)
@@ -17,6 +20,9 @@ function roundtrip(;book_dir=nothing, fix=false)
   if !isnothing(book_dir)
     dir = book_dir
   end
+  global nexamples = 0
+  global all_examples = String[]
+  global recovered_examples = String[]
 
   # 1. Extract code from book
   collect_examples(dir)
@@ -34,16 +40,17 @@ export roundtrip
 ##
 
 function generate_report(; fix::Bool)
-  (total, good, bad) = (0,0,0)
+  (total, good, bad, error) = (0,0,0,0)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
       if match(r"\.md", file) !== nothing
-        (t,g,b) = generate_diff(root, file; fix=fix)
-        total+=t; good+=g; bad+=b
+        (t,g,b,e) = generate_diff(root, file; fix=fix)
+        total+=t; good+=g; bad+=b; error+=e
       end
     end
   end
-  println("-----------------------------------\nTotal: $total, good: $good, bad: $bad")
+  println("-----------------------------------\nTotal: $total, good: $good, bad: $bad (error: $error)")
+  println(nexamples)
 end
 
 function try_colored_diff(expected::AbstractString, got::AbstractString)
@@ -60,7 +67,7 @@ function try_colored_diff(expected::AbstractString, got::AbstractString)
 end
 
 function generate_diff(root::String, filename::String; fix::Bool)
-  (total, good, bad) = (0,0,0)
+  (total, good, bad, error) = (0,0,0,0)
   entire = read(joinpath(root, filename), String)
   examples = split(entire, "## Example")
   for example in examples
@@ -68,10 +75,12 @@ function generate_diff(root::String, filename::String; fix::Bool)
     if m !== nothing
       total += 1
       filename = m.captures[1]
+      push!(recovered_examples, filename)
       got = m.captures[2]
       expected = read(filename, String)
       expected, nel = prepare_jlcon_content(expected)
       diff = "An ERROR"
+        
       if isnothing(match(r"ERROR", got))
         diff = try_colored_diff(expected, got)
       end
@@ -93,6 +102,7 @@ function generate_diff(root::String, filename::String; fix::Bool)
           end
           println()
         else
+          error += 1
           @warn "$filename gave an ERROR!"
           if fix
             if nel
@@ -104,7 +114,7 @@ function generate_diff(root::String, filename::String; fix::Bool)
       end
     end
   end
-  return (total, good, bad)
+  return (total, good, bad, error)
 end
 
 

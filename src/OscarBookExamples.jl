@@ -64,7 +64,7 @@ function generate_diff(root::String, filename::String; fix::Bool)
   entire = read(joinpath(root, filename), String)
   examples = split(entire, "## Example")
   for example in examples
-    m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n([^`]*)```", example)
+    m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
     if m !== nothing
       total += 1
       filename = m.captures[1]

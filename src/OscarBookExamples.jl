@@ -144,7 +144,7 @@ function write_examples_to_markdown(root::String, filename::String, examples::St
   targetfolder = joinpath(doc_dir, decomposed.captures[1])
   mkpath(targetfolder)
   outfilename = joinpath(targetfolder, decomposed.captures[2] * ".md")
-  rm(outfilename)
+  !isfile(outfilename) || rm(outfilename)
   io = open(outfilename, "a");
   write_preamble(io, decomposed.captures[2])
   write(io, examples)
@@ -162,19 +162,25 @@ function get_ordered_examples(root::String, filename::String)
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
   label = decomposed.captures[2]
   result = ""
+  found_files = String[]
   for line in eachsplit(latex, "\n")
-    m = match(r"^[^%]*\\inputminted{([^\}]*)\}\{([^\}]*)\}", line)
+    m = match(r"^[^%]*\\inputminted[^\{]*{([^\}]*)\}\{([^\}]*)\}", line)
     if m !== nothing
       matchtype = m.captures[1]
       matchfilename = m.captures[2]
       matchfilename = replace(matchfilename, "\\fd/" => "")
       matchfilename = joinpath(root, matchfilename)
-      matchtype == "jlcon" || @warn "Unknown type $matchtype $matchfilename"
-      if matchtype == "jlcon"
-        exclude = length(filter(s->occursin(s, matchfilename), excluded)) > 0
-        if !exclude
-          result *= read_example(matchfilename, label)
+      if !(matchfilename in found_files)
+        push!(found_files, matchfilename)
+        matchtype == "jlcon" || @warn "Unknown type $matchtype $matchfilename"
+        if matchtype == "jlcon"
+          exclude = length(filter(s->occursin(s, matchfilename), excluded)) > 0
+          if !exclude
+            result *= read_example(matchfilename, label)
+          end
         end
+      else
+        println("$matchfilename already seen!")
       end
     end
   end

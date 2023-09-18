@@ -70,6 +70,7 @@ function generate_diff(root::String, filename::String; fix::Bool)
       filename = m.captures[1]
       got = m.captures[2]
       expected = read(filename, String)
+      expected, nel = prepare_jlcon_content(expected)
       diff = "An ERROR"
       if isnothing(match(r"ERROR", got))
         diff = try_colored_diff(expected, got)
@@ -85,11 +86,20 @@ function generate_diff(root::String, filename::String; fix::Bool)
         if diff != "An ERROR"
           println("DIFF:\n$diff\n--")
           if fix
+            if nel
+              got = replace(got, r"\n\n" => "\n")
+            end
             write(filename, got)
           end
           println()
         else
           @warn "$filename gave an ERROR!"
+          if fix
+            if nel
+              got = replace(got, r"\n\n" => "\n")
+            end
+            write(filename*".fail", got)
+          end
         end
       end
     end
@@ -167,15 +177,37 @@ function read_example(file::String, label::AbstractString)
     return ""
   end
   result = read(file, String)
+  if isfile(file*".fail")
+    rm(file*".fail")
+  end
+  result, _ = prepare_jlcon_content(result)
   is_repl = match(r"^julia>", result) !== nothing
   # Should newline at end be removed?
   if is_repl
     result = "```jldoctest $label\n$result```"
+    push!(all_examples, file)
   else
     result = "```julia\n$result```"
   end
   result = "## Example `$file`\n$result\n\n"
+  global nexamples += 1
   return result
+end
+
+function prepare_jlcon_content(content::String)
+  result = content
+  if isnothing(match(r"\n$", result))
+    result *= "\n"
+  end
+  noemptylines = false
+  if !isnothing(match(r"julia>.*\njulia>", result))
+    println("Does not use empty lines!\n$result")
+    noemptylines = true
+    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
+    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
+    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
+  end
+  return result, noemptylines
 end
 
 function complete_latex(root::String, filename::String)

@@ -1,5 +1,7 @@
 module OscarBookExamples
 
+using Documenter
+
 
 const oscar_book_dir = "~/papers/oscar-book"
 const doc_dir = joinpath(Base.pkgdir(OscarBookExamples), "docs/src")
@@ -9,6 +11,22 @@ const excluded = [
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_yz",
                  ]
 
+
+function roundtrip(;book_dir=nothing)
+  dir = oscar_book_dir
+  if !isnothing(book_dir)
+    dir = book_dir
+  end
+
+  # 1. Extract code from book
+  collect_examples(dir)
+  # 2. Run doctests
+  Documenter.doctest(OscarBookExamples; fix=true)
+  # 3. Update code in book, report errors
+  generate_report()
+end
+export roundtrip
+
 ###############################################################################
 ###############################################################################
 ## 
@@ -16,33 +34,65 @@ const excluded = [
 ##
 
 function generate_report()
+  (total, good, bad) = (0,0,0)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
       if match(r"\.md", file) !== nothing
-        generate_diff(root, file)
+        (t,g,b) = generate_diff(root, file)
+        total+=t; good+=g; bad+=b
       end
     end
+  end
+  println("-----------------------------------\nTotal: $total, good: $good, bad: $bad")
+end
+
+function try_colored_diff(expected::AbstractString, got::AbstractString)
+  diffdir = mktempdir()
+  expfile = joinpath(diffdir, "expected")
+  gotfile = joinpath(diffdir, "got")
+  write(expfile, expected)
+  write(gotfile, got)
+  try
+    return read(pipeline(Cmd(`wdiff $expfile $gotfile`, ignorestatus=true), `colordiff`), String)
+  catch
+    return read(Cmd(`diff $expfile $gotfile`, ignorestatus=true), String)
   end
 end
 
 function generate_diff(root::String, filename::String)
+  (total, good, bad) = (0,0,0)
   entire = read(joinpath(root, filename), String)
   examples = split(entire, "## Example")
   for example in examples
     m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n([^`]*)```", example)
     if m !== nothing
+      total += 1
       filename = m.captures[1]
-      content = m.captures[2]
-      orig = read(filename, String)
-      if content == orig
+      got = m.captures[2]
+      expected = read(filename, String)
+      diff = "An ERROR"
+      if isnothing(match(r"ERROR", got))
+        diff = try_colored_diff(expected, got)
+      end
+      if got == expected
+        good += 1
         println("$filename OK")
       else
+        bad += 1
         println("Filename: $filename")
-        println("Content:\n$content\n--")
-        println("Orig:\n$orig\n--")
+        println("EXPECTED:\n$expected\n--")
+        println("GOT:\n$got\n--")
+        if diff != "An ERROR"
+          println("DIFF:\n$diff\n--")
+          write(filename, got)
+          println()
+        else
+          @warn "$filename gave an ERROR!"
+        end
       end
     end
   end
+  return (total, good, bad)
 end
 
 
@@ -52,11 +102,7 @@ end
 ## Getting examples from book
 ##
 
-function collect_examples(; dir=nothing)
-  book_dir = oscar_book_dir
-  if !isnothing(dir)
-    book_dir = dir
-  end
+function collect_examples(book_dir::String)
   println("Bookdir is $book_dir")
 
   for (root, dirs, files) in walkdir(joinpath(expanduser(book_dir), "book/chapters"))
@@ -75,7 +121,6 @@ function write_examples_to_markdown(root::String, filename::String, examples::St
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
   targetfolder = joinpath(doc_dir, decomposed.captures[1])
   mkpath(targetfolder)
-  println("wetm: $filename")
   outfilename = joinpath(targetfolder, decomposed.captures[2] * ".md")
   rm(outfilename)
   io = open(outfilename, "a");
@@ -98,7 +143,6 @@ function get_ordered_examples(root::String, filename::String)
   for line in eachsplit(latex, "\n")
     m = match(r"^[^%]*\\inputminted{([^\}]*)\}\{([^\}]*)\}", line)
     if m !== nothing
-      println(m.match)
       matchtype = m.captures[1]
       matchfilename = m.captures[2]
       matchtype == "jlcon" || @warn "Unknown type $matchtype $matchfilename"
@@ -116,6 +160,10 @@ function get_ordered_examples(root::String, filename::String)
 end
 
 function read_example(file::String, label::AbstractString)
+  if !isfile(file)
+    @warn "$file is missing!"
+    return ""
+  end
   result = read(file, String)
   is_repl = match(r"^julia>", result) !== nothing
   # Should newline at end be removed?

@@ -157,10 +157,10 @@ function get_ordered_examples(root::String, filename::String)
     if m !== nothing
       matchtype = m.captures[1]
       matchfilename = m.captures[2]
+      matchfilename = replace(matchfilename, "\\fd/" => "")
+      matchfilename = joinpath(root, matchfilename)
       matchtype == "jlcon" || @warn "Unknown type $matchtype $matchfilename"
       if matchtype == "jlcon"
-        matchfilename = replace(matchfilename, "\\fd/" => "")
-        matchfilename = joinpath(root, matchfilename)
         exclude = length(filter(s->occursin(s, matchfilename), excluded)) > 0
         if !exclude
           result *= read_example(matchfilename, label)

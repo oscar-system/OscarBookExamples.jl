@@ -12,7 +12,7 @@ const excluded = [
                  ]
 
 
-function roundtrip(;book_dir=nothing)
+function roundtrip(;book_dir=nothing, fix=false)
   dir = oscar_book_dir
   if !isnothing(book_dir)
     dir = book_dir
@@ -23,7 +23,7 @@ function roundtrip(;book_dir=nothing)
   # 2. Run doctests
   Documenter.doctest(OscarBookExamples; fix=true)
   # 3. Update code in book, report errors
-  generate_report()
+  generate_report(; fix=fix)
 end
 export roundtrip
 
@@ -33,12 +33,12 @@ export roundtrip
 ## Reporting on errors
 ##
 
-function generate_report()
+function generate_report(; fix::Bool)
   (total, good, bad) = (0,0,0)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
       if match(r"\.md", file) !== nothing
-        (t,g,b) = generate_diff(root, file)
+        (t,g,b) = generate_diff(root, file; fix=fix)
         total+=t; good+=g; bad+=b
       end
     end
@@ -59,7 +59,7 @@ function try_colored_diff(expected::AbstractString, got::AbstractString)
   end
 end
 
-function generate_diff(root::String, filename::String)
+function generate_diff(root::String, filename::String; fix::Bool)
   (total, good, bad) = (0,0,0)
   entire = read(joinpath(root, filename), String)
   examples = split(entire, "## Example")
@@ -84,7 +84,9 @@ function generate_diff(root::String, filename::String)
         println("GOT:\n$got\n--")
         if diff != "An ERROR"
           println("DIFF:\n$diff\n--")
-          write(filename, got)
+          if fix
+            write(filename, got)
+          end
           println()
         else
           @warn "$filename gave an ERROR!"

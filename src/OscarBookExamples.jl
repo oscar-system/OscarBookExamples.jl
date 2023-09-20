@@ -9,6 +9,7 @@ const obe_dir = Base.pkgdir(OscarBookExamples)
 const excluded = [
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_xz",
                   "markwig-ristau-schleis-faithful-tropicalization/eliminate_yz",
+                  "number-theory/cohenlenstra.jlcon",
                  ]
 nexamples = 0
 all_examples = String[]
@@ -20,9 +21,15 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off)
   if !isnothing(book_dir)
     dir = book_dir
   end
+
+  # Reset some global debug variables
   global nexamples = 0
   global all_examples = String[]
   global recovered_examples = String[]
+  # Clean output dir
+  rm(doc_dir, recursive=true, force=true)
+  mkdir(doc_dir)
+
 
   # 1. Extract code from book
   collect_examples(dir)
@@ -44,7 +51,7 @@ function generate_report(; fix::Symbol)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
       if match(r"\.md", file) !== nothing
-        (t,g,b,e) = generate_diff(root, file; fix=fix)
+        (t,g,b,e) = generate_diffs(root, file; fix=fix)
         total+=t; good+=g; bad+=b; error+=e
       end
     end
@@ -66,7 +73,45 @@ function try_colored_diff(expected::AbstractString, got::AbstractString)
   end
 end
 
-function generate_diff(root::String, md_filename::String; fix::Symbol)
+function update_jlcon(jlcon_filename::AbstractString, result::AbstractString; fix::Symbol, nel::Bool)
+  if fix == :fix
+    if nel
+      result = replace(result, r"\n\n" => "\n")
+    end
+    write(jlcon_filename, result)
+  end
+end
+
+function record_diff(jlcon_filename::AbstractString, got::AbstractString; fix::Symbol)
+  expected = read(jlcon_filename, String)
+  expected, nel = prepare_jlcon_content(expected)
+  diff = "An ERROR"
+  result = :good
+
+  if isnothing(match(r"ERROR", got))
+    diff = try_colored_diff(expected, got)
+  end
+  if got == expected
+    println("$jlcon_filename OK")
+  else
+    result = :bad
+    println("Filename: $jlcon_filename")
+    println("EXPECTED:\n$expected\n--")
+    println("GOT:\n$got\n--")
+    if diff != "An ERROR"
+      println("DIFF:\n$diff\n--")
+      update_jlcon(jlcon_filename, got; fix=fix, nel=nel)
+      println()
+    else
+      result = :error
+      @warn "$jlcon_filename gave an ERROR!"
+      update_jlcon(jlcon_filename*".fail", got; fix=fix, nel=nel)
+    end
+  end
+  return result
+end
+
+function generate_diffs(root::String, md_filename::String; fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
   entire = read(joinpath(root, md_filename), String)
   examples = split(entire, "## Example")
@@ -77,41 +122,10 @@ function generate_diff(root::String, md_filename::String; fix::Symbol)
       jlcon_filename = m.captures[1]
       push!(recovered_examples, jlcon_filename)
       got = m.captures[2]
-      expected = read(jlcon_filename, String)
-      expected, nel = prepare_jlcon_content(expected)
-      diff = "An ERROR"
-        
-      if isnothing(match(r"ERROR", got))
-        diff = try_colored_diff(expected, got)
-      end
-      if got == expected
-        good += 1
-        println("$jlcon_filename OK")
-      else
-        bad += 1
-        println("Filename: $jlcon_filename")
-        println("EXPECTED:\n$expected\n--")
-        println("GOT:\n$got\n--")
-        if diff != "An ERROR"
-          println("DIFF:\n$diff\n--")
-          if fix == :fix
-            if nel
-              got = replace(got, r"\n\n" => "\n")
-            end
-            write(jlcon_filename, got)
-          end
-          println()
-        else
-          error += 1
-          @warn "$jlcon_filename gave an ERROR!"
-          if fix == :fix
-            if nel
-              got = replace(got, r"\n\n" => "\n")
-            end
-            write(jlcon_filename*".fail", got)
-          end
-        end
-      end
+      state = record_diff(jlcon_filename, got; fix=fix)
+      state == :good && (good += 1)
+      state == :bad && (bad += 1)
+      state == :error && (error += 1)
     end
   end
   return (total, good, bad, error)
@@ -217,7 +231,7 @@ function prepare_jlcon_content(content::String)
   end
   noemptylines = false
   if !isnothing(match(r"julia>.*\njulia>", result))
-    println("Does not use empty lines!\n$result")
+    # println("Does not use empty lines!\n$result")
     noemptylines = true
     result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
     result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")

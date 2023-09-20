@@ -15,7 +15,7 @@ all_examples = String[]
 recovered_examples = String[]
 
 
-function roundtrip(;book_dir=nothing, fix=false)
+function roundtrip(;book_dir=nothing, fix::Symbol=:off)
   dir = oscar_book_dir
   if !isnothing(book_dir)
     dir = book_dir
@@ -39,7 +39,7 @@ export roundtrip
 ## Reporting on errors
 ##
 
-function generate_report(; fix::Bool)
+function generate_report(; fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
@@ -66,18 +66,18 @@ function try_colored_diff(expected::AbstractString, got::AbstractString)
   end
 end
 
-function generate_diff(root::String, filename::String; fix::Bool)
+function generate_diff(root::String, md_filename::String; fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
-  entire = read(joinpath(root, filename), String)
+  entire = read(joinpath(root, md_filename), String)
   examples = split(entire, "## Example")
   for example in examples
     m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
     if m !== nothing
       total += 1
-      filename = m.captures[1]
-      push!(recovered_examples, filename)
+      jlcon_filename = m.captures[1]
+      push!(recovered_examples, jlcon_filename)
       got = m.captures[2]
-      expected = read(filename, String)
+      expected = read(jlcon_filename, String)
       expected, nel = prepare_jlcon_content(expected)
       diff = "An ERROR"
         
@@ -86,29 +86,29 @@ function generate_diff(root::String, filename::String; fix::Bool)
       end
       if got == expected
         good += 1
-        println("$filename OK")
+        println("$jlcon_filename OK")
       else
         bad += 1
-        println("Filename: $filename")
+        println("Filename: $jlcon_filename")
         println("EXPECTED:\n$expected\n--")
         println("GOT:\n$got\n--")
         if diff != "An ERROR"
           println("DIFF:\n$diff\n--")
-          if fix
+          if fix == :fix
             if nel
               got = replace(got, r"\n\n" => "\n")
             end
-            write(filename, got)
+            write(jlcon_filename, got)
           end
           println()
         else
           error += 1
-          @warn "$filename gave an ERROR!"
-          if fix
+          @warn "$jlcon_filename gave an ERROR!"
+          if fix == :fix
             if nel
               got = replace(got, r"\n\n" => "\n")
             end
-            write(filename*".fail", got)
+            write(jlcon_filename*".fail", got)
           end
         end
       end

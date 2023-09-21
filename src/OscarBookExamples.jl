@@ -14,10 +14,11 @@ const excluded = [
 nexamples = 0
 all_examples = String[]
 recovered_examples = String[]
+marked_examples = String[]
 
 
 function roundtrip(;book_dir=nothing, fix::Symbol=:off)
-  dir = oscar_book_dir
+  dir = expanduser(oscar_book_dir)
   if !isnothing(book_dir)
     dir = book_dir
   end
@@ -26,17 +27,34 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off)
   global nexamples = 0
   global all_examples = String[]
   global recovered_examples = String[]
+  global marked_examples = String[]
   # Clean output dir
-  rm(doc_dir, recursive=true, force=true)
-  mkdir(doc_dir)
+  for thing in readdir(doc_dir)
+    if thing != "index.md"
+      rm(joinpath(doc_dir, thing), recursive=true, force=true)
+    end
+  end
+  originals_dir = mktempdir()
+  jlcon_dir = joinpath(dir, "jlcon-testing")
+  for thing in readdir(jlcon_dir)
+    println("Thing is $thing")
+    if thing != "README.md"
+      rm(joinpath(jlcon_dir, thing), recursive=true, force=true)
+    end
+  end
 
 
   # 1. Extract code from book
-  collect_examples(dir)
+  collect_examples(dir, originals_dir; fix=fix)
   # 2. Run doctests
   Documenter.doctest(OscarBookExamples; fix=true)
   # 3. Update code in book, report errors
   generate_report(; fix=fix)
+  
+  if fix == :report_errors
+    # 4. Write diff files to oscar book dir
+    write_broken_dffs(jlcon_dir, originals_dir)
+  end
 end
 export roundtrip
 
@@ -46,18 +64,32 @@ export roundtrip
 ## Reporting on errors
 ##
 
-function generate_report(; fix::Symbol)
+function generate_report(;fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
   for (root, dirs, files) in walkdir(doc_dir)
     for file in files
-      if match(r"\.md", file) !== nothing
+      if (match(r"\.md", file) !== nothing) && (file != "index.md")
         (t,g,b,e) = generate_diffs(root, file; fix=fix)
         total+=t; good+=g; bad+=b; error+=e
+        b == 0 || push!(marked_examples, joinpath(root, file))
       end
     end
   end
   println("-----------------------------------\nTotal: $total, good: $good, bad: $bad (error: $error)")
   println(nexamples)
+end
+
+function write_broken_dffs(jlcon_dir::String, originals_dir::String)
+  for mf in marked_examples
+    m = match(r"([^/]*.md)", mf)
+    filename = m.captures[1]
+    original = replace(mf, doc_dir=>originals_dir)
+    targetfolder = replace(mf, filename=>"", doc_dir=>jlcon_dir)
+    isdir(targetfolder) || mkpath(targetfolder)
+    cmd0 = Cmd(`wdiff $original $mf`, ignorestatus=true)
+    cmd1 = pipeline(cmd0, `colordiff`)
+    write(joinpath(targetfolder, filename), read(cmd1))
+  end
 end
 
 function try_colored_diff(expected::AbstractString, got::AbstractString)
@@ -71,10 +103,11 @@ function try_colored_diff(expected::AbstractString, got::AbstractString)
   catch
     return read(Cmd(`diff $expfile $gotfile`, ignorestatus=true), String)
   end
+  rm(diffdir, recursive=true, force=true)
 end
 
 function update_jlcon(jlcon_filename::AbstractString, result::AbstractString; fix::Symbol, nel::Bool)
-  if fix == :fix
+  if fix == :fix_jlcons
     if nel
       result = replace(result, r"\n\n" => "\n")
     end
@@ -92,7 +125,7 @@ function record_diff(jlcon_filename::AbstractString, got::AbstractString; fix::S
     diff = try_colored_diff(expected, got)
   end
   if got == expected
-    println("$jlcon_filename OK")
+    # println("$jlcon_filename OK")
   else
     result = :bad
     println("Filename: $jlcon_filename")
@@ -125,7 +158,7 @@ function generate_diffs(root::String, md_filename::String; fix::Symbol)
       state = record_diff(jlcon_filename, got; fix=fix)
       state == :good && (good += 1)
       state == :bad && (bad += 1)
-      state == :error && (error += 1)
+      state == :error && (bad+=1; error += 1)
     end
   end
   return (total, good, bad, error)
@@ -138,7 +171,7 @@ end
 ## Getting examples from book
 ##
 
-function collect_examples(book_dir::String)
+function collect_examples(book_dir::String, originals_dir::String; fix::Symbol)
   println("Bookdir is $book_dir")
 
   for (root, dirs, files) in walkdir(joinpath(expanduser(book_dir), "book/chapters"))
@@ -146,7 +179,12 @@ function collect_examples(book_dir::String)
       if file === "chapter.tex"
         examples = get_ordered_examples(root, file)
         if !isempty(examples)
-          write_examples_to_markdown(root, file, examples)
+          (md_folder, md_filename) = write_examples_to_markdown(root, file, examples)
+          if fix == :report_errors
+            target_folder = replace(md_folder, doc_dir=>originals_dir)
+            isdir(target_folder) || mkdir(target_folder)
+            cp(joinpath(md_folder, md_filename), joinpath(target_folder, md_filename))
+          end
         end
       end
     end
@@ -156,13 +194,15 @@ end
 function write_examples_to_markdown(root::String, filename::String, examples::String)
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
   targetfolder = joinpath(doc_dir, decomposed.captures[1])
+  targetfile = decomposed.captures[2] * ".md"
   mkpath(targetfolder)
-  outfilename = joinpath(targetfolder, decomposed.captures[2] * ".md")
+  outfilename = joinpath(targetfolder, targetfile)
   !isfile(outfilename) || rm(outfilename)
   io = open(outfilename, "a");
   write_preamble(io, decomposed.captures[2])
   write(io, examples)
   close(io)
+  return (targetfolder, targetfile)
 end
 
 function write_preamble(io, chapter::AbstractString)

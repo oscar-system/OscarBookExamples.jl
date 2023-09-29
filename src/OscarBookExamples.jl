@@ -12,6 +12,23 @@ const excluded = [
                   "brandhorst-zach-fibration-hopping/vinberg_2.jlcon",
                   "brandhorst-zach-fibration-hopping/vinberg_3.jlcon",
                   # "cornerstones",
+                  # "cornerstones",
+                  # "aga-boehm-hoffmann-markwig-traore",
+                  # "bies-kastner-toric-geometry",
+                  # "bies-turner-string-theory-applications",
+                  # "boehm-breuer-git-fans",
+                  # "brandhorst-zach-fibration-hopping",
+                  # "breuer-nebe-parker-orthogonal-discriminants",
+                  # "decker-schmitt-invariant-theory",
+                  # "decker-song-intersection-theory",
+                  # "eder-mohr-ideal-theoretic",
+                  # "flake-fourier-monomial-bases",
+                  # "joswig-kastner-lorenz-confirmable-workflows",
+                  # "kuehne-schroeter-matroids",
+                  # "markwig-ristau-schleis-faithful-tropicalization",
+                  # "panizzut-ren-tropical-geometry",
+                  # # "rose-sturmfels-telen-tropical-implicitization",
+                  # "weber-free-associative-algebras",
                  ]
 nexamples = 0
 all_examples = String[]
@@ -205,20 +222,39 @@ end
 
 function write_examples_to_markdown(DS::DirectorySetup, root::String, filename::String, examples::String)
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
+  println("Root is $root")
   targetfolder = joinpath(DS.doc_dir, decomposed.captures[1])
   targetfile = decomposed.captures[2] * ".md"
   mkpath(targetfolder)
   outfilename = joinpath(targetfolder, targetfile)
   !isfile(outfilename) || rm(outfilename)
   io = open(outfilename, "a");
-  write_preamble(io, decomposed.captures[2])
+  write_preamble(DS, io, root, targetfolder, decomposed.captures[2])
+  # return
   write(io, examples)
   close(io)
   return (targetfolder, targetfile)
 end
 
-function write_preamble(io, chapter::AbstractString)
+function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::String, chapter::AbstractString)
   generic = read(joinpath(obe_dir, "preamble.md"), String)
+  auxdir = joinpath(root, "auxiliary_code")
+  if isdir(auxdir)
+    if isfile(joinpath(auxdir, "main.jl"))
+      println("There is some auxiliary code!")
+      # mkdir(joinpath(targetfolder, "aux_$chapter"))
+      includepath = joinpath(targetfolder, "aux_$chapter")
+      cp(auxdir, includepath)
+      includestuff = """    cd("$includepath") do
+                              include("main.jl")
+                            end
+                     """
+      println("IP: $includepath")
+      generic = replace(generic, r"#AUXCODE\n"=>includestuff)
+    end
+  else
+    generic = replace(generic, r"#AUXCODE\n"=>"")
+  end
   write(io, generic)
   write(io, "\n# Examples of $chapter\n\n")
 end

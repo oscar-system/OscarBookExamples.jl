@@ -1,6 +1,9 @@
 module OscarBookExamples
 
 using Documenter
+import Oscar
+
+include(joinpath(Oscar.oscardir, "docs/documenter_helpers.jl"))
 
 
 const obe_dir = Base.pkgdir(OscarBookExamples)
@@ -11,6 +14,7 @@ const excluded = [
                   "bies-turner-string-theory-applications/code-examples/SU5.jlcon",
                   "brandhorst-zach-fibration-hopping/vinberg_2.jlcon",
                   "brandhorst-zach-fibration-hopping/vinberg_3.jlcon",
+                  "cornerstones/polyhedral-geometry/ch-benchmark.jlcon",
                   # "cornerstones",
                   # "cornerstones",
                   # "aga-boehm-hoffmann-markwig-traore",

@@ -1,7 +1,7 @@
 module OscarBookExamples
 
 using Documenter
-import Oscar
+using Oscar
 
 include(joinpath(Oscar.oscardir, "docs/documenter_helpers.jl"))
 
@@ -123,8 +123,9 @@ function write_broken_diffs(DS::DirectorySetup)
     original = replace(mf, DS.doc_dir=>DS.originals_dir)
     targetfolder = replace(mf, filename=>"", DS.doc_dir=>DS.jlcon_dir)
     isdir(targetfolder) || mkpath(targetfolder)
-    cmd0 = Cmd(`wdiff $original $mf`, ignorestatus=true)
-    cmd1 = pipeline(cmd0, `colordiff`)
+    # cmd0 = Cmd(`wdiff $original $mf`, ignorestatus=true)
+    # cmd1 = pipeline(cmd0, `colordiff`)
+    cmd1 = Cmd(`diff -U 1000 -w --strip-trailing-cr $original $mf`, ignorestatus=true)
     write(joinpath(targetfolder, filename), read(cmd1))
   end
 end
@@ -182,6 +183,8 @@ end
 function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
   entire = read(joinpath(root, md_filename), String)
+  entire = replace(entire, "Nemo."=>"")
+  entire = replace(entire, "Oscar."=>"")
   examples = split(entire, "## Example")
   for example in examples
     m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
@@ -226,7 +229,6 @@ end
 
 function write_examples_to_markdown(DS::DirectorySetup, root::String, filename::String, examples::String)
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
-  println("Root is $root")
   targetfolder = joinpath(DS.doc_dir, decomposed.captures[1])
   targetfile = decomposed.captures[2] * ".md"
   mkpath(targetfolder)
@@ -280,8 +282,8 @@ function get_ordered_examples(DS::DirectorySetup, root::String, filename::String
       matchfilename = replace(matchfilename, r"^/" => "")
       if !(matchfilename in found_files)
         push!(found_files, matchfilename)
-        matchtype == "jlcon" || @warn "Unknown type $matchtype $matchfilename"
-        if matchtype == "jlcon"
+        matchtype == "jlcon" || matchtype == "jl" || @warn "Unknown type $matchtype $matchfilename"
+        if matchtype == "jlcon" || matchtype == "jl"
           exclude = filter(s->occursin(s, matchfilename), excluded)
           if length(exclude) == 0
             result *= read_example(DS, matchfilename, label)
@@ -312,7 +314,7 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
     result = "```jldoctest $label\n$result```"
     push!(all_examples, file)
   else
-    result = "```julia\n$result```"
+    result = "```jldoctest $label\n$result\n# output\n```"
   end
   result = "## Example `$incomplete_file`\n$result\n\n"
   global nexamples += 1
@@ -331,6 +333,8 @@ function prepare_jlcon_content(content::String)
     result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
     result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
     result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
+    result = replace(result, "Oscar." => "")
+    result = replace(result, "Nemo." => "")
   end
   return result, noemptylines
 end

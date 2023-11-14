@@ -59,6 +59,7 @@ function init(;book_dir=nothing)
     end
   end
   td = mktempdir()
+  println("Tempdir is $td")
   jd = joinpath(obd, "jlcon-testing")
   for thing in readdir(jd)
     if thing != "README.md"
@@ -138,7 +139,7 @@ function try_colored_diff(DS::DirectorySetup, expected::AbstractString, got::Abs
   try
     return read(pipeline(Cmd(`wdiff $expfile $gotfile`, ignorestatus=true), `colordiff`), String)
   catch
-    return read(Cmd(`diff $expfile $gotfile`, ignorestatus=true), String)
+    return read(Cmd(`diff -w $expfile $gotfile`, ignorestatus=true), String)
   end
 end
 
@@ -183,8 +184,6 @@ end
 function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; fix::Symbol)
   (total, good, bad, error) = (0,0,0,0)
   entire = read(joinpath(root, md_filename), String)
-  entire = replace(entire, "Nemo."=>"")
-  entire = replace(entire, "Oscar."=>"")
   examples = split(entire, "## Example")
   for example in examples
     m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
@@ -192,7 +191,7 @@ function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; f
       total += 1
       jlcon_filename = joinpath(DS.oscar_book_dir, m.captures[1])
       push!(recovered_examples, jlcon_filename)
-      got = m.captures[2]
+      got, _ = prepare_jlcon_content(m.captures[2])
       state = record_diff(DS, jlcon_filename, got; fix=fix)
       state == :good && (good += 1)
       state == :bad && (bad += 1)
@@ -308,7 +307,7 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
     rm(file*".fail")
   end
   result, _ = prepare_jlcon_content(result)
-  is_repl = match(r"^julia>", result) !== nothing
+  is_repl = match(r"julia>", result) !== nothing
   # Should newline at end be removed?
   if is_repl
     result = "```jldoctest $label\n$result```"
@@ -321,21 +320,28 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
   return result
 end
 
-function prepare_jlcon_content(content::String)
+function prepare_jlcon_content(content::AbstractString)
   result = content
+  result = replace(result, r"^#.*$"m => "")
+  result = replace(result, r"\n+\n\n" => "\n\n")
   if isnothing(match(r"\n$", result))
     result *= "\n"
   end
   noemptylines = false
+  noemptylines =  !isnothing(match(r"julia>.*\njulia>", result))
   if !isnothing(match(r"julia>.*\njulia>", result))
-    # println("Does not use empty lines!\n$result")
     noemptylines = true
-    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
-    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
-    result = replace(result, r"(julia>.*)\njulia>" => s"\1\n\njulia>")
-    result = replace(result, "Oscar." => "")
-    result = replace(result, "Nemo." => "")
   end
+  if !isnothing(match(r"julia>", result))
+    result = replace(result, r"^([^j]*|j(?!ulia))*julia>" => "julia>")
+    result = replace(result, r"(?<!^)julia>" => "\njulia>")
+    result = replace(result, r"\n\n\njulia>" => "\n\njulia>")
+    result = replace(result, r"\n\n\njulia>" => "\n\njulia>")
+    result = replace(result, r"\n\n\njulia>" => "\n\njulia>")
+  end
+  result = replace(result, "(?<!using )Oscar." => "")
+  result = replace(result, "Nemo." => "")
+  println("After:\n$result\n")
   return result, noemptylines
 end
 

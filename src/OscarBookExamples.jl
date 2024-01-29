@@ -16,7 +16,7 @@ const excluded = [
                   "brandhorst-zach-fibration-hopping/vinberg_3.jlcon",
                   "cornerstones/polyhedral-geometry/ch-benchmark.jlcon",
                   # "cornerstones",
-                  # "cornerstones",
+                  # # "cornerstones",
                   # "aga-boehm-hoffmann-markwig-traore",
                   # "bies-kastner-toric-geometry",
                   # "bies-turner-string-theory-applications",
@@ -30,9 +30,14 @@ const excluded = [
                   # "joswig-kastner-lorenz-confirmable-workflows",
                   # "kuehne-schroeter-matroids",
                   # "markwig-ristau-schleis-faithful-tropicalization",
-                  # "panizzut-ren-tropical-geometry",
-                  # # "rose-sturmfels-telen-tropical-implicitization",
+                  # "rose-sturmfels-telen-tropical-implicitization",
                   # "weber-free-associative-algebras",
+                  # "holt-ren-tropical-geometry",
+                  # "algebra",
+                  # "group",
+                  # # "number",
+                  # # "specialized",
+                  # "polyhedral",
                  ]
 nexamples = 0
 all_examples = String[]
@@ -71,7 +76,9 @@ function init(;book_dir=nothing)
   return DirectorySetup(dd, obd, td, jd, od)
 end
 
-
+# Possible values for fix:
+# :fix_jlcons Repair the jlcons
+# :report_errors Generate a md file highlighting errors
 function roundtrip(;book_dir=nothing, fix::Symbol=:off)
   DS = init(;book_dir)
 
@@ -306,7 +313,7 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
   if isfile(file*".fail")
     rm(file*".fail")
   end
-  result, _ = prepare_jlcon_content(result)
+  result, _ = prepare_jlcon_content(result; remove_prefixes=false)
   is_repl = match(r"julia>", result) !== nothing
   # Should newline at end be removed?
   if is_repl
@@ -320,9 +327,13 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
   return result
 end
 
-function prepare_jlcon_content(content::AbstractString)
+function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   result = content
-  result = replace(result, r"^#.*$"m => "")
+  # Get rid of comments in the code
+  result = replace(result, r"^#\D.*$"m => "")
+  # Get rid of empty lines with whitespaces
+  result = replace(result, r"^\s*$"m => "")
+  # Get rid of many empty lines
   result = replace(result, r"\n+\n\n" => "\n\n")
   if isnothing(match(r"\n$", result))
     result *= "\n"
@@ -339,9 +350,10 @@ function prepare_jlcon_content(content::AbstractString)
     result = replace(result, r"\n\n\njulia>" => "\n\njulia>")
     result = replace(result, r"\n\n\njulia>" => "\n\njulia>")
   end
-  result = replace(result, "(?<!using )Oscar." => "")
-  result = replace(result, "Nemo." => "")
-  println("After:\n$result\n")
+  if(remove_prefixes)
+    result = replace(result, r"(?<!using )Oscar\.([^v])" => s"\1")
+    result = replace(result, "Nemo." => "")
+  end
   return result, noemptylines
 end
 

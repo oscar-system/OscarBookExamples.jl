@@ -36,8 +36,12 @@ const excluded = [
                   # "algebra",
                   # "group",
                   # # "number",
-                  # # "specialized",
+                  # "specialized",
                   # "polyhedral",
+                  # Exclude some number theory files:
+                  "number-theory/unit_plot.jlcon",
+                  "number-theory/intro_plot_lattice.jlcon",
+                  "number-theory/intro5_0.jlcon",
                  ]
 nexamples = 0
 all_examples = String[]
@@ -194,7 +198,7 @@ function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; f
   examples = split(entire, "## Example")
   for example in examples
     m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
-    if m !== nothing
+    if m !== nothing && isnothing(match(r"no-read", m.captures[1]))
       total += 1
       jlcon_filename = joinpath(DS.oscar_book_dir, m.captures[1])
       push!(recovered_examples, jlcon_filename)
@@ -217,11 +221,13 @@ end
 
 function collect_examples(DS::DirectorySetup; fix::Symbol)
   for (root, dirs, files) in walkdir(joinpath(DS.oscar_book_dir, "book/chapters"))
+    decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
+    label = decomposed.captures[2]
     for file in files
       if file === "chapter.tex"
-        examples = get_ordered_examples(DS, root, file)
+        examples = get_ordered_examples(DS, root, file, label)
         if !isempty(examples)
-          (md_folder, md_filename) = write_examples_to_markdown(DS, root, file, examples)
+          (md_folder, md_filename) = write_examples_to_markdown(DS, root, file, examples, label)
           if fix == :report_errors
             target_folder = replace(md_folder, DS.doc_dir=>DS.originals_dir)
             isdir(target_folder) || mkdir(target_folder)
@@ -233,7 +239,7 @@ function collect_examples(DS::DirectorySetup; fix::Symbol)
   end
 end
 
-function write_examples_to_markdown(DS::DirectorySetup, root::String, filename::String, examples::String)
+function write_examples_to_markdown(DS::DirectorySetup, root::String, filename::String, examples::String, label::AbstractString)
   decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
   targetfolder = joinpath(DS.doc_dir, decomposed.captures[1])
   targetfile = decomposed.captures[2] * ".md"
@@ -241,14 +247,14 @@ function write_examples_to_markdown(DS::DirectorySetup, root::String, filename::
   outfilename = joinpath(targetfolder, targetfile)
   !isfile(outfilename) || rm(outfilename)
   io = open(outfilename, "a");
-  write_preamble(DS, io, root, targetfolder, decomposed.captures[2])
+  write_preamble(DS, io, root, targetfolder, decomposed.captures[2], label::AbstractString)
   # return
   write(io, examples)
   close(io)
   return (targetfolder, targetfile)
 end
 
-function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::String, chapter::AbstractString)
+function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::String, chapter::AbstractString, label::AbstractString)
   generic = read(joinpath(obe_dir, "preamble.md"), String)
   auxdir = joinpath(root, "auxiliary_code")
   if isdir(auxdir)
@@ -267,14 +273,13 @@ function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::Stri
   else
     generic = replace(generic, r"#AUXCODE\n"=>"")
   end
+  generic = replace(generic, r"jldoctest #LABEL"=>"jldoctest $label")
   write(io, generic)
   write(io, "\n# Examples of $chapter\n\n")
 end
 
-function get_ordered_examples(DS::DirectorySetup, root::String, filename::String)
+function get_ordered_examples(DS::DirectorySetup, root::String, filename::String, label::AbstractString)
   latex = complete_latex(root, filename)
-  decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
-  label = decomposed.captures[2]
   result = ""
   found_files = String[]
   for line in eachsplit(latex, "\n")

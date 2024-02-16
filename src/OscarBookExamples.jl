@@ -83,7 +83,7 @@ end
 # Possible values for fix:
 # :fix_jlcons Repair the jlcons
 # :report_errors Generate a md file highlighting errors
-function roundtrip(;book_dir=nothing, fix::Symbol=:off)
+function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   DS = init(;book_dir)
 
   # Reset some global debug variables
@@ -94,7 +94,7 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off)
 
 
   # 1. Extract code from book
-  collect_examples(DS; fix=fix)
+  collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests
   Documenter.doctest(OscarBookExamples; fix=true)
   # 3. Update code in book, report errors
@@ -219,13 +219,13 @@ end
 ## Getting examples from book
 ##
 
-function collect_examples(DS::DirectorySetup; fix::Symbol)
+function collect_examples(DS::DirectorySetup; fix::Symbol, only=r".*")
   for (root, dirs, files) in walkdir(joinpath(DS.oscar_book_dir, "book/chapters"))
     decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
     label = decomposed.captures[2]
     for file in files
       if file === "chapter.tex"
-        examples = get_ordered_examples(DS, root, file, label)
+        examples = get_ordered_examples(DS, root, file, label; only)
         if !isempty(examples)
           (md_folder, md_filename) = write_examples_to_markdown(DS, root, file, examples, label)
           if fix == :report_errors
@@ -278,7 +278,7 @@ function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::Stri
   write(io, "\n# Examples of $chapter\n\n")
 end
 
-function get_ordered_examples(DS::DirectorySetup, root::String, filename::String, label::AbstractString)
+function get_ordered_examples(DS::DirectorySetup, root::String, filename::String, label::AbstractString; only=r".*")
   latex = complete_latex(root, filename)
   result = ""
   found_files = String[]
@@ -296,7 +296,7 @@ function get_ordered_examples(DS::DirectorySetup, root::String, filename::String
         matchtype == "jlcon" || matchtype == "jl" || @warn "Unknown type $matchtype $matchfilename"
         if matchtype == "jlcon" || matchtype == "jl"
           exclude = filter(s->occursin(s, matchfilename), excluded)
-          if length(exclude) == 0
+          if length(exclude) == 0 && contains(matchfilename, only)
             result *= read_example(DS, matchfilename, label)
           end
         end

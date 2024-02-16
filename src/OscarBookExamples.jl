@@ -43,6 +43,12 @@ const excluded = [
                   "number-theory/intro_plot_lattice.jlcon",
                   "number-theory/intro5_0.jlcon",
                  ]
+
+const global_filters = [
+                        r"^.*\(generic function with.*\)$"m,
+                        r"^\s*[0-9\.]+ seconds (.* allocations: .*)$"m,
+                       ]
+
 nexamples = 0
 all_examples = String[]
 recovered_examples = String[]
@@ -96,7 +102,7 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   # 1. Extract code from book
   collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests
-  Documenter.doctest(OscarBookExamples; fix=true)
+  Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
   # 3. Update code in book, report errors
   generate_report(DS; fix=fix)
   
@@ -145,6 +151,10 @@ end
 function try_colored_diff(DS::DirectorySetup, expected::AbstractString, got::AbstractString)
   expfile = joinpath(DS.temp_dir, "expected")
   gotfile = joinpath(DS.temp_dir, "got")
+  for f in global_filters
+    expected = replace(expected, f=>"")
+    got = replace(got, f=>"")
+  end
   write(expfile, expected)
   write(gotfile, got)
   try
@@ -169,10 +179,16 @@ function record_diff(DS::DirectorySetup, jlcon_filename::AbstractString, got::Ab
   diff = "An ERROR"
   result = :good
 
-  if isnothing(match(r"ERROR", got))
+  #if isnothing(match(r"ERROR", got))
     diff = try_colored_diff(DS, expected, got)
+  #end
+  tmpexp = expected
+  tmpgot = got
+  for f in global_filters
+    tmpexp = replace(tmpexp, f=>"")
+    tmpgot = replace(tmpgot, f=>"")
   end
-  if got == expected
+  if tmpgot == tmpexp
     # println("$jlcon_filename OK")
   else
     result = :bad

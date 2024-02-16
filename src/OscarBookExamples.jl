@@ -179,9 +179,9 @@ function record_diff(DS::DirectorySetup, jlcon_filename::AbstractString, got::Ab
   diff = "An ERROR"
   result = :good
 
-  #if isnothing(match(r"ERROR", got))
+  if count(r"ERROR", got) == count(r"ERROR", expected)
     diff = try_colored_diff(DS, expected, got)
-  #end
+  end
   tmpexp = expected
   tmpgot = got
   for f in global_filters

@@ -43,6 +43,13 @@ const excluded = [
                   "number-theory/intro_plot_lattice.jlcon",
                   "number-theory/intro5_0.jlcon",
                  ]
+
+const global_filters = [
+                        r"^.*\(generic function with.*\)$"m, # function definitions
+                        r"^\s*[0-9\.]+ seconds (.* allocations: .*)$"m, # timings
+                        r" @ \w* ?~/\.julia/packages/(?:Nemo|Hecke|AbstractAlgebra|Polymake)/\K[\w\d]+/.*\.jl:\d+"m, # this removes the package version slug, filename and linenumber
+                       ]
+
 nexamples = 0
 all_examples = String[]
 recovered_examples = String[]
@@ -83,7 +90,7 @@ end
 # Possible values for fix:
 # :fix_jlcons Repair the jlcons
 # :report_errors Generate a md file highlighting errors
-function roundtrip(;book_dir=nothing, fix::Symbol=:off)
+function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   DS = init(;book_dir)
 
   # Reset some global debug variables
@@ -94,9 +101,9 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off)
 
 
   # 1. Extract code from book
-  collect_examples(DS; fix=fix)
+  collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests
-  Documenter.doctest(OscarBookExamples; fix=true)
+  Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
   # 3. Update code in book, report errors
   generate_report(DS; fix=fix)
   
@@ -145,6 +152,10 @@ end
 function try_colored_diff(DS::DirectorySetup, expected::AbstractString, got::AbstractString)
   expfile = joinpath(DS.temp_dir, "expected")
   gotfile = joinpath(DS.temp_dir, "got")
+  for f in global_filters
+    expected = replace(expected, f=>"")
+    got = replace(got, f=>"")
+  end
   write(expfile, expected)
   write(gotfile, got)
   try
@@ -169,10 +180,16 @@ function record_diff(DS::DirectorySetup, jlcon_filename::AbstractString, got::Ab
   diff = "An ERROR"
   result = :good
 
-  if isnothing(match(r"ERROR", got))
+  if count(r"ERROR", got) == count(r"ERROR", expected)
     diff = try_colored_diff(DS, expected, got)
   end
-  if got == expected
+  tmpexp = expected
+  tmpgot = got
+  for f in global_filters
+    tmpexp = replace(tmpexp, f=>"")
+    tmpgot = replace(tmpgot, f=>"")
+  end
+  if tmpgot == tmpexp
     # println("$jlcon_filename OK")
   else
     result = :bad
@@ -219,13 +236,13 @@ end
 ## Getting examples from book
 ##
 
-function collect_examples(DS::DirectorySetup; fix::Symbol)
+function collect_examples(DS::DirectorySetup; fix::Symbol, only=r".*")
   for (root, dirs, files) in walkdir(joinpath(DS.oscar_book_dir, "book/chapters"))
     decomposed = match(r"([^\/]*)\/([^\/]*)$", root)
     label = decomposed.captures[2]
     for file in files
       if file === "chapter.tex"
-        examples = get_ordered_examples(DS, root, file, label)
+        examples = get_ordered_examples(DS, root, file, label; only)
         if !isempty(examples)
           (md_folder, md_filename) = write_examples_to_markdown(DS, root, file, examples, label)
           if fix == :report_errors
@@ -278,7 +295,7 @@ function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::Stri
   write(io, "\n# Examples of $chapter\n\n")
 end
 
-function get_ordered_examples(DS::DirectorySetup, root::String, filename::String, label::AbstractString)
+function get_ordered_examples(DS::DirectorySetup, root::String, filename::String, label::AbstractString; only=r".*")
   latex = complete_latex(root, filename)
   result = ""
   found_files = String[]
@@ -296,7 +313,7 @@ function get_ordered_examples(DS::DirectorySetup, root::String, filename::String
         matchtype == "jlcon" || matchtype == "jl" || @warn "Unknown type $matchtype $matchfilename"
         if matchtype == "jlcon" || matchtype == "jl"
           exclude = filter(s->occursin(s, matchfilename), excluded)
-          if length(exclude) == 0
+          if length(exclude) == 0 && contains(matchfilename, only)
             result *= read_example(DS, matchfilename, label)
           end
         end
@@ -319,11 +336,13 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
     rm(file*".fail")
   end
   result, _ = prepare_jlcon_content(result; remove_prefixes=false)
-  is_repl = match(r"julia>", result) !== nothing
+  is_repl = contains(result, r"julia>")
   # Should newline at end be removed?
   if is_repl
     result = "```jldoctest $label\n$result```"
     push!(all_examples, file)
+  elseif contains(result, r"^# output"m)
+    result = "```jldoctest $label\n$result\n```"
   else
     result = "```jldoctest $label\n$result\n# output\n```"
   end
@@ -335,7 +354,7 @@ end
 function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   result = content
   # Get rid of comments in the code
-  result = replace(result, r"^#\D.*$"m => "")
+  result = replace(result, r"^#\D(?!output)\D.*$"m => "")
   # Get rid of empty lines with whitespaces
   result = replace(result, r"^\s*$"m => "")
   # Get rid of many empty lines

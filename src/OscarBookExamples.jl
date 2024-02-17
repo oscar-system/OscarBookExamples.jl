@@ -354,7 +354,8 @@ end
 function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   result = content
   # Get rid of comments in the code
-  result = replace(result, r"^#\D(?!output)\D.*$"m => "")
+  result = replace(result, r"^#\D(?!output)\D.*$"m => "") # keep '# output'
+  result = replace(result, r"\n# output$" => "\n") # unless it is the last line
   # Get rid of empty lines with whitespaces
   result = replace(result, r"^\s*$"m => "")
   # Get rid of many empty lines

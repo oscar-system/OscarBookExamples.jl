@@ -45,8 +45,9 @@ const excluded = [
                  ]
 
 const global_filters = [
-                        r"^.*\(generic function with.*\)$"m,
-                        r"^\s*[0-9\.]+ seconds (.* allocations: .*)$"m,
+                        r"^.*\(generic function with.*\)$"m, # function definitions
+                        r"^\s*[0-9\.]+ seconds (.* allocations: .*)$"m, # timings
+                        r" @ \w* ?~/\.julia/packages/(?:Nemo|Hecke|AbstractAlgebra|Polymake)/\K[\w\d]+/.*\.jl:\d+"m, # this removes the package version slug, filename and linenumber
                        ]
 
 nexamples = 0
@@ -335,11 +336,13 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
     rm(file*".fail")
   end
   result, _ = prepare_jlcon_content(result; remove_prefixes=false)
-  is_repl = match(r"julia>", result) !== nothing
+  is_repl = contains(result, r"julia>")
   # Should newline at end be removed?
   if is_repl
     result = "```jldoctest $label\n$result```"
     push!(all_examples, file)
+  elseif contains(result, r"^# output"m)
+    result = "```jldoctest $label\n$result\n```"
   else
     result = "```jldoctest $label\n$result\n# output\n```"
   end
@@ -351,7 +354,7 @@ end
 function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   result = content
   # Get rid of comments in the code
-  result = replace(result, r"^#\D.*$"m => "")
+  result = replace(result, r"^#\D(?!output)\D.*$"m => "")
   # Get rid of empty lines with whitespaces
   result = replace(result, r"^\s*$"m => "")
   # Get rid of many empty lines

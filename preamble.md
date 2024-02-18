@@ -7,6 +7,8 @@ CurrentModule = OscarBookExamples.Oscar
 using Oscar
 Oscar.set_seed!(42)
 Oscar.randseed!(42)
+eval(Oscar.doctestsetup())
+nothing
 #AUXCODE
 
 # output

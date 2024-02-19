@@ -56,7 +56,7 @@ It can also be run with the `fix=:report_errors` argument to store the results i
 julia> roundtrip(book_dir="/path/to/the/oscar-book", fix=:report_errors; only=r"polyhedral-geometry")
 ```
 
-The corresponding file in the book folder, e.g. `/path/to/the/oscar-bookjlcon-testing/cornerstones/polyhedral-geometry.md`, will now contain a diff between the markdown generated from collecting the jlcons and the results of running these blocks as doctests, i.e. look for lines starting with `+` or `-`.
+The corresponding file in the book folder, e.g. `/path/to/the/oscar-book/jlcon-testing/cornerstones/polyhedral-geometry.md`, will now contain a diff between the markdown generated from collecting the jlcons and the results of running these blocks as doctests, i.e. look for lines starting with `+` or `-`.
 
 
 #### Known Issues

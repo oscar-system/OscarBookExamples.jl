@@ -377,7 +377,7 @@ function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   end
   if(remove_prefixes)
     result = replace(result, r"(?<!using )Oscar\.([^v])" => s"\1")
-    result = replace(result, "Nemo." => "")
+    #result = replace(result, "Nemo." => "")
   end
   return result, noemptylines
 end

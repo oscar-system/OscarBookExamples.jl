@@ -99,11 +99,19 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   global recovered_examples = String[]
   global marked_examples = String[]
 
+  # keep copy of load path
+  curr_load_path = copy(LOAD_PATH)
+  act_proj = dirname(Base.active_project())
 
   # 1. Extract code from book
   collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests
-  Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
+  try
+    Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
+  finally
+    Oscar.Pkg.activate(act_proj)
+    copy!(LOAD_PATH, curr_load_path)
+  end
   # 3. Update code in book, report errors
   generate_report(DS; fix=fix)
   
@@ -274,15 +282,25 @@ end
 function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::String, chapter::AbstractString, label::AbstractString)
   generic = read(joinpath(obe_dir, "preamble.md"), String)
   auxdir = joinpath(root, "auxiliary_code")
+  act_proj = dirname(Base.active_project())
   if isdir(auxdir)
     if isfile(joinpath(auxdir, "main.jl"))
       println("There is some auxiliary code!")
       # mkdir(joinpath(targetfolder, "aux_$chapter"))
       includepath = joinpath(targetfolder, "aux_$chapter")
       cp(auxdir, includepath)
-      includestuff = """    cd("$includepath") do
+      includestuff = """
+                            using Pkg
+                            copy!(LOAD_PATH, Base.DEFAULT_LOAD_PATH)
+                            temp = mktempdir()
+                            Pkg.activate(temp)
+                            pushfirst!(LOAD_PATH, "$act_proj")
+                            cd("$includepath") do
                               include("main.jl")
                             end
+                            LOAD_PATH[1] = temp
+                            Pkg.activate("$act_proj")
+                            println(LOAD_PATH)
                      """
       println("IP: $includepath")
       generic = replace(generic, r"#AUXCODE\n"=>includestuff)

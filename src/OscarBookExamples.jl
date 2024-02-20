@@ -295,12 +295,16 @@ function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::Stri
                             temp = mktempdir()
                             Pkg.activate(temp)
                             pushfirst!(LOAD_PATH, "$act_proj")
-                            cd("$includepath") do
-                              include("main.jl")
+                            try
+                              cd("$includepath") do
+                                include("main.jl")
+                              end
+                            catch e
+                              println("ignoring error from $includepath/main.jl:")
+                              showerror(stdout, e)
                             end
                             LOAD_PATH[1] = temp
                             Pkg.activate("$act_proj")
-                            println(LOAD_PATH)
                      """
       println("IP: $includepath")
       generic = replace(generic, r"#AUXCODE\n"=>includestuff)

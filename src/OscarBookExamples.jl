@@ -384,8 +384,9 @@ end
 
 function complete_latex(root::String, filename::String)
   result = read(joinpath(root, filename), String)
-  while match(r"\\input\{[^\}^\.]*\}", result) !== nothing
-    inputs = eachmatch(r"\\input\{([^\}^\.]*)\}", result)
+  inputre = r"\\input\{(?:\\fd/)?([^\}^\.]*?)(:?\.tex)?\}"
+  while occursin(inputre, result)
+    inputs = eachmatch(inputre, result)
     for m in inputs
       matchstr = m.match
       matchfile = m.captures[1]

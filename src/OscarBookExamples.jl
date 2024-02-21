@@ -184,7 +184,7 @@ end
 
 function record_diff(DS::DirectorySetup, jlcon_filename::AbstractString, got::AbstractString; fix::Symbol)
   expected = read(jlcon_filename, String)
-  expected, nel = prepare_jlcon_content(expected)
+  expected, nel, _ = prepare_jlcon_content(expected)
   diff = "An ERROR"
   result = :good
 
@@ -227,7 +227,7 @@ function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; f
       total += 1
       jlcon_filename = joinpath(DS.oscar_book_dir, m.captures[1])
       push!(recovered_examples, jlcon_filename)
-      got, _ = prepare_jlcon_content(m.captures[2])
+      got, _, _ = prepare_jlcon_content(m.captures[2])
       state = record_diff(DS, jlcon_filename, got; fix=fix)
       state == :good && (good += 1)
       state == :bad && (bad += 1)
@@ -357,16 +357,17 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
   if isfile(file*".fail")
     rm(file*".fail")
   end
-  result, _ = prepare_jlcon_content(result; remove_prefixes=false)
+  result, _, filter = prepare_jlcon_content(result; remove_prefixes=false)
+  filter = filter != nothing ? "; filter=$filter" : ""
   is_repl = contains(result, r"julia>")
   # Should newline at end be removed?
   if is_repl
-    result = "```jldoctest $label\n$result```"
+    result = "```jldoctest $label$filter\n$result```"
     push!(all_examples, file)
   elseif contains(result, r"^# output"m)
-    result = "```jldoctest $label\n$result\n```"
+    result = "```jldoctest $label$filter\n$result\n```"
   else
-    result = "```jldoctest $label\n$result\n# output\n```"
+    result = "```jldoctest $label$filter\n$result\n# output\n```"
   end
   result = "## Example `$incomplete_file`\n$result\n\n"
   global nexamples += 1
@@ -385,6 +386,19 @@ function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   if isnothing(match(r"\n$", result))
     result *= "\n"
   end
+  filter = nothing
+  # this will find omitted parts of lines marked by `[...]` and create
+  # a corresponding filter
+  # (make sure we have a reasonable length string for matching)
+  omitre = r"^(.{15,})\[\.\.\.\]"m;
+  for m in eachmatch(omitre, result)
+    prefix = first(m.captures)
+    prefixre = Regex("^\\Q$prefix\\E\\K.*\$", "m")
+    if filter !== nothing && filter != prefixre
+      error("more than one omission per jlcon not supported")
+    end
+    filter = prefixre
+  end
   noemptylines = false
   noemptylines =  !isnothing(match(r"julia>.*\njulia>", result))
   if !isnothing(match(r"julia>.*\njulia>", result))
@@ -401,7 +415,7 @@ function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
     result = replace(result, r"(?<!using )Oscar\.([^v])" => s"\1")
     #result = replace(result, "Nemo." => "")
   end
-  return result, noemptylines
+  return result, noemptylines, filter
 end
 
 function complete_latex(root::String, filename::String)

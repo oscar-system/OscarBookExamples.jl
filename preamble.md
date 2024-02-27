@@ -5,7 +5,6 @@ CurrentModule = OscarBookExamples.Oscar
 ## Example no-read
 ```jldoctest #LABEL
 using Oscar
-using Plots
 Main.eval(Meta.parse("using Oscar"))
 eval(Oscar.doctestsetup())
 #AUXCODE

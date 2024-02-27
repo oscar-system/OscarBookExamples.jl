@@ -286,27 +286,25 @@ function write_preamble(DS::DirectorySetup, io, root::String, targetfolder::Stri
   if isdir(auxdir)
     if isfile(joinpath(auxdir, "main.jl"))
       println("There is some auxiliary code!")
-      # mkdir(joinpath(targetfolder, "aux_$chapter"))
-      includepath = joinpath(targetfolder, "aux_$chapter")
-      cp(auxdir, includepath)
       includestuff = """
                             using Pkg
                             copy!(LOAD_PATH, Base.DEFAULT_LOAD_PATH)
+                            @info pwd()
                             temp = mktempdir()
                             Pkg.activate(temp)
                             pushfirst!(LOAD_PATH, "$act_proj")
                             try
-                              cd("$includepath") do
-                                include("main.jl")
+                              for file in readdir("$auxdir")
+                                cp(joinpath("$auxdir",file), joinpath(".", file); force=true)
                               end
+                              include("main.jl")
                             catch e
-                              println("ignoring error from $includepath/main.jl:")
+                              println("ignoring error from $auxdir/main.jl:")
                               showerror(stdout, e)
                             end
                             LOAD_PATH[1] = temp
                             Pkg.activate("$act_proj")
                      """
-      println("IP: $includepath")
       generic = replace(generic, r"#AUXCODE\n"=>includestuff)
     end
   else

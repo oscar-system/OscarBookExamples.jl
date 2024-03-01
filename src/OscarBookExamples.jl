@@ -103,6 +103,11 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   curr_load_path = copy(LOAD_PATH)
   act_proj = dirname(Base.active_project())
 
+  # ugly workaround for betti tables parse error
+  Documenter.SOURCE_REGEX.pattern = raw"^       (?!(?:\d+\s+)+)(.*)$"
+  Documenter.SOURCE_REGEX.regex = C_NULL
+  Base.compile(Documenter.SOURCE_REGEX)
+
   # 1. Extract code from book
   collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests

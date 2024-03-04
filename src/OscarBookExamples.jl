@@ -112,7 +112,9 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   collect_examples(DS; fix=fix, only=only)
   # 2. Run doctests
   try
-    Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
+    withenv("LINES" => 40, "COLUMNS" => 70) do
+      Documenter.doctest(OscarBookExamples; fix=true, doctestfilters=global_filters)
+    end
   finally
     Oscar.Pkg.activate(act_proj)
     copy!(LOAD_PATH, curr_load_path)

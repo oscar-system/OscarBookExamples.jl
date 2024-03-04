@@ -104,7 +104,7 @@ function roundtrip(;book_dir=nothing, fix::Symbol=:off, only=r".*")
   act_proj = dirname(Base.active_project())
 
   # ugly workaround for betti tables parse error
-  Documenter.SOURCE_REGEX.pattern = raw"^       (?!(?:\s*\d+\s*)+$)(.*)$"
+  Documenter.SOURCE_REGEX.pattern = raw"^       (?!\s?0(?:\s*\d+\s*)+$)(.*)$"
   Documenter.SOURCE_REGEX.regex = C_NULL
   Base.compile(Documenter.SOURCE_REGEX)
 

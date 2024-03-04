@@ -48,6 +48,7 @@ const global_filters = [
                         r"^.*\(generic function with.*\)$"m, # function definitions
                         r"^\s*[0-9\.]+ seconds (.* allocations: .*)$"m, # timings
                         r" @ \w* ?~/\.julia/packages/(?:Nemo|Hecke|AbstractAlgebra|Polymake)/\K[\w\d]+/.*\.jl:\d+"m, # this removes the package version slug, filename and linenumber
+                        r"(coeff \d+ already initialized\n|)", # singular debug output that sometimes appears when running code twice
                        ]
 
 nexamples = 0

@@ -230,7 +230,7 @@ function generate_diffs(DS::DirectorySetup, root::String, md_filename::String; f
   entire = read(joinpath(root, md_filename), String)
   examples = split(entire, "## Example")
   for example in examples
-    m = match(r"^ `([^`]*)`\n```jldoctest [^`^\n]*\n(([^`]*|`(?!``))*)```", example)
+    m = match(r"^ `([^`]*)`\n```jldoctest[^`\n]*\n(([^`]*|`(?!``))*)```", example)
     if m !== nothing && isnothing(match(r"no-read", m.captures[1]))
       total += 1
       jlcon_filename = joinpath(DS.oscar_book_dir, m.captures[1])
@@ -363,8 +363,8 @@ function read_example(DS::DirectorySetup, incomplete_file::String, label::Abstra
   if isfile(file*".fail")
     rm(file*".fail")
   end
-  result, _, filter = prepare_jlcon_content(result; remove_prefixes=false)
-  filter = filter != nothing ? "; filter=$filter" : ""
+  result, _, filters = prepare_jlcon_content(result; remove_prefixes=false)
+  filter = isempty(filters) ? "" : "; filter=$filters"
   is_repl = contains(result, r"julia>")
   # Should newline at end be removed?
   if is_repl
@@ -392,18 +392,15 @@ function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
   if isnothing(match(r"\n$", result))
     result *= "\n"
   end
-  filter = nothing
+  filters = Regex[]
   # this will find omitted parts of lines marked by `[...]` and create
   # a corresponding filter
   # (make sure we have a reasonable length string for matching)
-  omitre = r"^(.{15,})\[\.\.\.\]"m;
+  omitre = r"^(.{6,})\[\.\.\.\]"m;
   for m in eachmatch(omitre, result)
     prefix = first(m.captures)
     prefixre = Regex("^\\Q$prefix\\E\\K.*\$", "m")
-    if filter !== nothing && filter != prefixre
-      error("more than one omission per jlcon not supported")
-    end
-    filter = prefixre
+    push!(filters, prefixre)
   end
   noemptylines = false
   noemptylines =  !isnothing(match(r"julia>.*\njulia>", result))
@@ -421,7 +418,7 @@ function prepare_jlcon_content(content::AbstractString; remove_prefixes=true)
     result = replace(result, r"(?<!using )Oscar\.([^v])" => s"\1")
     #result = replace(result, "Nemo." => "")
   end
-  return result, noemptylines, filter
+  return result, noemptylines, filters
 end
 
 function complete_latex(root::String, filename::String)

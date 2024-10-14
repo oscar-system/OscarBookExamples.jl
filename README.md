@@ -1,8 +1,5 @@
 # OscarBookExamples
 
-[![Build Status](https://github.com/lkastner/OscarBookExamples.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/lkastner/OscarBookExamples.jl/actions/workflows/CI.yml?query=branch%3Amain)
-
-
 ### To test some parts of the book please try the following:
 
 Clone this repository, the oscar-book repository and a create a checkout of the Oscar.jl repo on the `backports-release-1.0` branch.
